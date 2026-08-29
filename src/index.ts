@@ -7,51 +7,82 @@ export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
 
-    // 后台配置测试
-    if (url.pathname === "/setup") {
-  let token = url.searchParams.get("token") || "";
+    // /setup：检查后台配置
+    if (url.pathname === "/setup" && request.method === "GET") {
+      return new Response(`
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AI Phone Backend Setup</title>
+</head>
+<body style="font-family:sans-serif;padding:30px;max-width:700px;margin:auto">
+<h2>AI Phone Backend Setup</h2>
+<p>请输入你在模拟手机网页中生成的访问令牌：</p>
 
-  // 支持 Authorization: Bearer xxx
-  if (!token) {
-    const auth = request.headers.get("Authorization") || "";
-    if (auth.startsWith("Bearer ")) {
-      token = auth.slice(7);
+<form method="POST">
+<input name="token" type="password"
+style="width:100%;padding:14px;font-size:16px;box-sizing:border-box"
+placeholder="访问令牌">
+<br><br>
+<button style="padding:12px 20px;font-size:16px">生成配置</button>
+</form>
+</body>
+</html>
+      `, {
+        headers: {
+          "Content-Type": "text/html; charset=UTF-8"
+        }
+      });
     }
-  }
 
-  // 支持 X-Admin-Token
-  if (!token) {
-    token = request.headers.get("X-Admin-Token") || "";
-  }
+    // /setup 提交令牌
+    if (url.pathname === "/setup" && request.method === "POST") {
+      const form = await request.formData();
+      const token = String(form.get("token") || "");
 
-  if (!token || token !== env.ADMIN_TOKEN) {
-    return Response.json(
-      {
-        ok: false,
-        error: "访问令牌错误"
-      },
-      { status: 401 }
-    );
-  }
+      if (!token || token !== env.ADMIN_TOKEN) {
+        return new Response("访问令牌错误", { status: 401 });
+      }
 
-  return Response.json({
-    ok: true,
-    message: "配置验证成功"
-  });
-}
+      return Response.json({
+        relay_url: url.origin,
+        token: token,
+        task_endpoint: "/task",
+        test_endpoint: "/test",
+        ok: true
+      });
+    }
 
     // 测试后台任务
     if (url.pathname === "/test") {
+      const token = request.headers.get("Authorization")?.replace("Bearer ", "");
+
+      if (token !== env.ADMIN_TOKEN) {
+        return new Response("Unauthorized", { status: 401 });
+      }
+
       await env.AI_QUEUE.send({
         type: "test",
-        message: "你好，这是第一条后台测试消息"
+        message: "你好，这是第一条后台测试消息",
+        time: Date.now()
       });
 
-      return new Response("测试任务已进入 Queue！");
+      return Response.json({
+        ok: true,
+        message: "测试任务已进入 Queue！"
+      });
     }
 
     // 接收正式任务
     if (request.method === "POST" && url.pathname === "/task") {
+      const token = request.headers.get("Authorization")?.replace("Bearer ", "");
+
+      if (token !== env.ADMIN_TOKEN) {
+        return new Response("Unauthorized", { status: 401 });
+      }
+
       const body = await request.json();
 
       await env.AI_QUEUE.send(body);
