@@ -4,9 +4,7 @@ interface Env {
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
-    const url = new URL(request.url);
-
-    if (request.method === "POST" && url.pathname === "/task") {
+    if (request.method === "POST" && new URL(request.url).pathname === "/task") {
       const body = await request.json();
 
       await env.AI_QUEUE.send(body);
@@ -20,6 +18,14 @@ export default {
     return new Response("AI Phone Backend OK");
   },
 
-  async queue(batch: MessageBatch<any>): Promise<void> {
+  async queue(
+    batch: MessageBatch,
+    env: Env
+  ): Promise<void> {
     for (const message of batch.messages) {
-      console.log("后台
+      console.log("后台收到任务：", message.body);
+
+      message.ack();
+    }
+  }
+};
