@@ -4,11 +4,11 @@ export interface Env {
 }
 
 export default {
+  // 1. HTTP 请求处理器
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
     const path = url.pathname;
 
-    // 1. 跨域处理 (CORS)
     if (request.method === "OPTIONS") {
       return new Response(null, {
         headers: {
@@ -19,7 +19,6 @@ export default {
       });
     }
 
-    // 2. /setup 路径：提供可视化的 mmrelay1 配置生成页面
     if (path === "/setup") {
       const html = `<!DOCTYPE html>
 <html lang="zh-CN">
@@ -62,7 +61,6 @@ export default {
         test_endpoint: "/test",
         version: "1.0"
       };
-      // 转换为 APP 要求的 mmrelay1 字符串
       const jsonStr = JSON.stringify(payload);
       const encoded = btoa(encodeURIComponent(jsonStr));
       const mmrelayStr = "mmrelay1" + encoded;
@@ -81,21 +79,18 @@ export default {
       return new Response(html, { headers: { "Content-Type": "text/html; charset=utf-8" } });
     }
 
-    // 3. /test 路径：测试连通性
     if (path === "/test") {
       return new Response(JSON.stringify({ ok: true, status: "active" }), {
         headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" },
       });
     }
 
-    // 4. /task 路径：后台接收与转发任务
     if (path === "/task") {
       return new Response(JSON.stringify({ ok: true, message: "Task received" }), {
         headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" },
       });
     }
 
-    // 5. 根路径防护/提示
     return new Response(
       JSON.stringify({
         relay_url: url.origin,
@@ -106,4 +101,12 @@ export default {
       { headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } }
     );
   },
+
+  // 2. 补全队列消费处理器 (满足 Cloudflare API 要求)
+  async queue(batch: MessageBatch<any>, env: Env): Promise<void> {
+    for (const message of batch.messages) {
+      console.log("Received queue message:", message.body);
+      message.ack();
+    }
+  }
 };
